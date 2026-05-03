@@ -1,0 +1,58 @@
+/* Nawah Titanium — Light Enterprise Theme */
+
+/* Metric cards */
+.metric-card {
+    border-radius: 14px;
+    padding: 1.2rem;
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(27, 42, 74, 0.08);
+}
+
+/* Task items */
+.task-item {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    background: #F8FAFC;
+    color: #1B2A4A;
+    border: 1px solid #E2E8F0;
+    direction: rtl;
+}
+
+/* Response cards */
+.response-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    direction: rtl;
+}
+.response-card.success { border-right: 4px solid #16A34A; }
+.response-card.blocked { border-right: 4px solid #EF4444; }
+.response-card.error   { border-right: 4px solid #E8A838; }
+
+/* Upload badges */
+.upload-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+}
+.upload-badge.accepted { background: #ECFDF5; color: #16A34A; border: 1px solid #BBF7D0; }
+.upload-badge.blocked  { background: #FEF2F2; color: #EF4444; border: 1px solid #FECACA; }
+
+/* Refresh spinner */
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }

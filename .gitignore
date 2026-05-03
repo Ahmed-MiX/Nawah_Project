@@ -1,2 +1,63 @@
-venv/ 
-.env 
+# ============================================================
+# Nawah Platform — Impenetrable .gitignore Shield
+# ============================================================
+
+# === Python ===
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# === Secrets & Config ===
+.env
+.env.*
+*.key
+*.pem
+
+# === Database (recreated fresh on deployment) ===
+nawah_state.db
+*.db
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# === IDE / Editor ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === Operational Directories (contents ignored, structure kept) ===
+nawah_inbox/*
+!nawah_inbox/.gitkeep
+
+nawah_outbox/*
+!nawah_outbox/.gitkeep
+
+nawah_processed/*
+!nawah_processed/.gitkeep
+
+nawah_quarantine/*
+!nawah_quarantine/.gitkeep
+
+nawah_logs/*
+!nawah_logs/.gitkeep
+
+temp/*
+!temp/.gitkeep
+
+# === Build Artifacts ===
+*.pptx
+nawah_assets/
+
+# === OS Junk ===
+desktop.ini
+ehthumbs.db

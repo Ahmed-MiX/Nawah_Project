@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="نَوَاة — منظومة أتمتة المؤسسات الذكية">
+    <title>نَوَاة | مركز القيادة والسيطرة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            navy:    '#1B2A4A',
+                            blue:    '#2563EB',
+                            cyan:    '#3B82F6',
+                            green:   '#16A34A',
+                            purple:  '#7C3AED',
+                            gold:    '#E8A838',
+                            amber:   '#F59E0B',
+                        }
+                    },
+                    fontFamily: {
+                        tajawal: ['Tajawal', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="font-tajawal bg-slate-50 text-slate-800 min-h-screen">
+
+    <!-- ============ SIDEBAR (Light Corporate) ============ -->
+    <aside id="sidebar" class="fixed right-0 top-0 h-full w-64 z-50 overflow-y-auto
+                                bg-white border-l border-slate-200 shadow-sm">
+
+        <!-- Logo -->
+        <div class="p-4 text-center border-b border-slate-100">
+            <img src="/static/nawah_logo.png" alt="Nawah Logo" id="sidebar-logo"
+                 class="mx-auto rounded-xl w-[140px]" />
+            <h2 class="text-brand-navy font-extrabold text-lg mt-2">نَوَاة</h2>
+            <p class="text-slate-400 text-xs">Enterprise v5.0</p>
+        </div>
+
+        <!-- Radar Stats -->
+        <div class="px-4 py-3">
+            <h3 class="text-brand-navy font-bold text-sm mb-2">📡 رادار المهام</h3>
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-center">
+                    <div class="text-brand-gold font-extrabold text-xl" id="stat-pending">0</div>
+                    <div class="text-slate-500 text-xs">⏳ انتظار</div>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
+                    <div class="text-brand-blue font-extrabold text-xl" id="stat-progress">0</div>
+                    <div class="text-slate-500 text-xs">🔄 تنفيذ</div>
+                </div>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-2 text-center">
+                    <div class="text-brand-green font-extrabold text-xl" id="stat-completed">0</div>
+                    <div class="text-slate-500 text-xs">✅ مكتمل</div>
+                </div>
+                <div class="bg-red-50 border border-red-200 rounded-lg p-2 text-center">
+                    <div class="text-red-500 font-extrabold text-xl" id="stat-failed">0</div>
+                    <div class="text-slate-500 text-xs">❌ فشل</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="px-4">
+            <button onclick="refreshStats()" id="btn-refresh"
+                class="w-full py-2 rounded-lg font-bold text-white text-sm
+                       bg-brand-navy hover:bg-brand-blue transition-colors duration-200
+                       active:scale-95 flex items-center justify-center gap-1.5">
+                <span id="refresh-icon" class="inline-block">🔄</span>
+                تحديث الرادار
+            </button>
+        </div>
+
+        <hr class="border-slate-100 mx-4 my-3">
+
+        <!-- Recent Tasks -->
+        <div class="px-4 py-2">
+            <h3 class="text-brand-navy font-bold text-sm mb-2">📜 آخر المهام</h3>
+            <div id="recent-tasks" class="space-y-1.5 max-h-48 overflow-y-auto">
+                <p class="text-slate-400 text-sm text-center py-2">لا توجد مهام بعد</p>
+            </div>
+        </div>
+
+        <hr class="border-slate-100 mx-4 my-3">
+
+        <!-- Quarantine -->
+        <div class="px-4 pb-4">
+            <p class="text-slate-500 text-xs" id="quarantine-info">🔒 الحجر: 🟢 نظيف</p>
+        </div>
+    </aside>
+
+    <!-- ============ MAIN CONTENT ============ -->
+    <main class="mr-64 min-h-screen flex flex-col">
+
+        <!-- Hero -->
+        <div class="text-center pt-6 pb-4 px-6">
+            <img src="/static/nawah_logo.png" alt="Nawah Logo" id="main-logo"
+                 class="mx-auto rounded-2xl shadow-md w-[220px] mb-3 border border-slate-100" />
+            <h1 class="text-3xl font-extrabold text-brand-navy">مركز القيادة والسيطرة</h1>
+            <p class="text-slate-500 mt-1 text-sm">منظومة أتمتة المؤسسات الذكية — الجيل الخامس</p>
+            <div class="h-1 rounded-full mt-4 max-w-md mx-auto
+                        bg-gradient-to-l from-brand-gold via-brand-blue to-brand-green"></div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="grid grid-cols-4 gap-4 px-6 mb-5">
+            <div class="metric-card bg-white border border-slate-200 shadow-sm">
+                <div class="text-slate-500 text-sm">📥 الوارد</div>
+                <div class="text-brand-navy text-3xl font-extrabold mt-1" id="fs-inbox">0</div>
+            </div>
+            <div class="metric-card bg-white border border-slate-200 shadow-sm">
+                <div class="text-slate-500 text-sm">📊 تم التحليل</div>
+                <div class="text-brand-navy text-3xl font-extrabold mt-1" id="fs-analyzed">0</div>
+            </div>
+            <div class="metric-card bg-white border border-slate-200 shadow-sm">
+                <div class="text-slate-500 text-sm">✅ المعالج</div>
+                <div class="text-brand-navy text-3xl font-extrabold mt-1" id="fs-processed">0</div>
+            </div>
+            <div class="metric-card bg-white border border-slate-200 shadow-sm">
+                <div class="text-slate-500 text-sm">🔒 الحجر</div>
+                <div class="text-brand-navy text-3xl font-extrabold mt-1" id="fs-quarantine">0</div>
+            </div>
+        </div>
+
+        <!-- War Room + Chat -->
+        <div class="flex-1 px-6 mb-4">
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 min-h-[200px]">
+                <div id="war-room-content" class="text-center py-8">
+                    <div class="text-4xl mb-2 opacity-60">🎯</div>
+                    <h2 class="text-xl font-bold text-brand-navy">غرفة العمليات — في الانتظار</h2>
+                    <p class="text-slate-400 mt-1 text-sm">أرسل مهمة أو أرفق ملفاً لتفعيل سرب الوكلاء</p>
+                </div>
+                <!-- Command responses appear here -->
+                <div id="command-responses" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- ============ UNIFIED COMMAND BAR ============ -->
+        <div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+            <form id="command-form" class="flex items-center gap-3" onsubmit="return false;">
+                <!-- File Attachment -->
+                <label for="file-input" id="attach-btn"
+                       class="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 border border-slate-200
+                              flex items-center justify-center cursor-pointer
+                              hover:bg-brand-blue hover:text-white hover:border-brand-blue
+                              transition-colors duration-200 text-slate-500" title="إرفاق ملف">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                    </svg>
+                </label>
+                <input type="file" id="file-input" class="hidden" multiple
+                       accept=".pdf,.png,.jpg,.jpeg,.csv,.txt,.docx" />
+                <div id="file-badge" class="hidden flex-shrink-0 bg-blue-50 text-brand-blue text-xs
+                            px-2 py-1 rounded-md border border-blue-200 flex items-center gap-1">
+                    <span id="file-badge-name"></span>
+                    <button type="button" onclick="clearFile()" class="text-red-400 hover:text-red-600 font-bold">✕</button>
+                </div>
+
+                <!-- Text Input -->
+                <input type="text" id="command-input"
+                       class="flex-1 h-10 px-4 rounded-lg border border-slate-200 bg-slate-50
+                              text-slate-800 text-sm placeholder:text-slate-400
+                              focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue
+                              transition-all duration-200"
+                       placeholder="أدخل أمرك هنا..." autocomplete="off" />
+
+                <!-- Submit -->
+                <button type="submit" id="submit-btn" onclick="submitCommand()"
+                        class="flex-shrink-0 h-10 px-5 rounded-lg font-bold text-white text-sm
+                               bg-gradient-to-l from-brand-gold to-brand-amber
+                               hover:brightness-110 hover:shadow-md
+                               transition-all duration-200 active:scale-95
+                               flex items-center gap-1.5">
+                    <span>إرسال</span>
+                    <svg class="w-4 h-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
