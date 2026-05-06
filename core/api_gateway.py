@@ -81,9 +81,9 @@ def get_stats():
 
 
 # ============================================================
-# POST /api/command — REAL PIPELINE (Equal Citizen)
-# Files → ingress_firewall → nawah_inbox (Watcher picks up)
-# Text → saved as .txt → nawah_inbox (Watcher picks up)
+# POST /api/command — FUSED PIPELINE (File + Text = ONE Task)
+# Files → ingress_firewall → nawah_inbox (stored)
+# Then: L1 Synthesizer + L2 Dispatcher invoked IMMEDIATELY
 # ============================================================
 @app.post("/api/command")
 async def unified_command(
@@ -91,11 +91,14 @@ async def unified_command(
     files: Optional[List[UploadFile]] = File(None),
 ):
     """
-    Unified Command Bar: text + files enter the REAL pipeline.
-    Files go to nawah_inbox. The Watcher/Synthesizer processes them.
-    NO MOCKS. Real DB. Real L1 analysis.
+    Unified Command Bar: text + files are FUSED into ONE task.
+    Files pass through firewall → saved to nawah_inbox.
+    Then L1 + L2 are invoked synchronously with BOTH the instruction and file metadata.
     """
     result = {"status": "received", "uploads": [], "text_task": None}
+
+    accepted_files_meta = []  # Collect metadata for fusion
+    command_text = command.strip()
 
     # --- 1. Process file uploads through ingress_firewall → nawah_inbox ---
     if files:
@@ -125,9 +128,16 @@ async def unified_command(
                         "reason": verdict.reason,
                     })
                 else:
-                    # SAFE → Move to nawah_inbox for the Watcher to pick up
+                    # SAFE → Move to nawah_inbox for storage
                     inbox_path = os.path.join("nawah_inbox", safe_name)
                     shutil.move(temp_path, inbox_path)
+                    accepted_files_meta.append({
+                        "file_name": file.filename,
+                        "file_path": os.path.abspath(inbox_path),
+                        "file_type": os.path.splitext(file.filename)[1].lower().lstrip(".") or "bin",
+                        "file_size_bytes": len(content),
+                        "security_status": "CLEARED",
+                    })
                     result["uploads"].append({
                         "filename": file.filename,
                         "status": "accepted",
@@ -147,37 +157,202 @@ async def unified_command(
                 except Exception:
                     pass
 
-    # --- 2. Process text command → save as .txt → nawah_inbox ---
-    if command.strip():
-        text_filename = f"web_cmd_{uuid.uuid4().hex[:8]}.txt"
-        text_path = os.path.join("nawah_inbox", text_filename)
+    # --- 2. FUSION LOGIC: Route based on what we received ---
+    has_files = len(accepted_files_meta) > 0
+    has_text = bool(command_text)
+
+    if has_files:
+        # === FUSED PATH: File(s) + optional text → ONE task ===
         try:
-            with open(text_path, "w", encoding="utf-8") as f:
-                f.write(command.strip())
+            from core.synthesizer import TaskSynthesizer, CriticalAPIFailure
+            from core.message_bus import TaskBroker
+            from core.dispatcher import L2Dispatcher
+            import json
+
+            synthesizer = TaskSynthesizer()
+            broker = TaskBroker()
+            dispatcher = L2Dispatcher()
+
+            # Build instruction
+            if has_text:
+                instruction = command_text
+            else:
+                file_names = ", ".join(m["file_name"] for m in accepted_files_meta)
+                instruction = f"تحليل الملف(ات): {file_names}"
+
+            # L1: Analyze (with graceful degradation)
+            l1_failed = False
+            try:
+                l1_result = synthesizer.analyze(
+                    user_input=instruction,
+                    attachments_metadata=accepted_files_meta,
+                    source="web_portal",
+                )
+            except (CriticalAPIFailure, Exception) as l1_err:
+                print(f"⚠️ L1 API OFFLINE (FUSED) — تفعيل وضع التحليل المحلي: {l1_err}")
+                l1_failed = True
+                task_id = str(uuid.uuid4())
+                l1_result = {
+                    "task_id": task_id,
+                    "commander_instruction": instruction,
+                    "attachments": accepted_files_meta,
+                    "l1_triage": {
+                        "intent": "DOCUMENT_ANALYSIS",
+                        "recommended_agent": "analyst_agent",
+                        "priority": "HIGH",
+                        "language": "ar",
+                    },
+                    "source": "web_portal",
+                    "api_fallback": True,
+                }
+
+            # Save to outbox
+            task_id = l1_result.get("task_id", str(uuid.uuid4()))
+            output_filename = f"web_{task_id[:8]}.json"
+            output_path = os.path.join("nawah_outbox", output_filename)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(l1_result, f, ensure_ascii=False, indent=4)
+
+            # Register in DB
+            broker.register_task(task_id, output_filename, l1_result)
+
+            # L2: Dispatch to agent (agents have graceful degradation)
+            dispatch_result = dispatcher.dispatch(l1_result)
+
+            # Save result to DB
+            ai_response = dispatch_result.get("message", "")
+            dispatch_status = "COMPLETED" if dispatch_result.get("status") == "completed" else "FAILED"
+            broker.update_task_result(task_id, dispatch_status, ai_response)
+
+            # Extract triage info for UI
+            triage = l1_result.get("l1_triage", {})
+            intent_raw = triage.get("intent", "UNKNOWN")
+            agent_raw = triage.get("recommended_agent", "general_agent")
+            intent = intent_raw.value if hasattr(intent_raw, 'value') else str(intent_raw)
+            agent = agent_raw.value if hasattr(agent_raw, 'value') else str(agent_raw)
+
+            result["ai_response"] = ai_response
+            result["triage"] = {
+                "intent": intent,
+                "agent": agent,
+                "task_id": task_id,
+                "api_fallback": l1_failed,
+            }
             result["text_task"] = {
                 "status": "accepted",
-                "filename": text_filename,
-                "message": "تم إيداع الأمر في صندوق الوارد. سيتم تحليله تلقائياً.",
+                "filename": output_filename,
+                "message": f"تم دمج الأمر مع الملف(ات) → {agent}" + (" [وضع محلي]" if l1_failed else ""),
             }
-            print(f"📥 بوابة الويب: أمر نصي → {text_filename} → nawah_inbox")
+            pipeline_tag = "FUSION" if not l1_failed else "FUSION→FALLBACK"
+            print(f"🔗 {pipeline_tag}: أمر + {len(accepted_files_meta)} ملف(ات) → مهمة {task_id[:8]}")
+
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             result["text_task"] = {
                 "status": "error",
-                "message": f"فشل حفظ الأمر: {e}",
+                "message": f"فشل المعالجة المباشرة: {e}",
+            }
+
+    elif has_text:
+        # === TEXT-ONLY PATH: Run L1 + L2 synchronously ===
+        try:
+            from core.synthesizer import TaskSynthesizer, CriticalAPIFailure
+            from core.message_bus import TaskBroker
+            from core.dispatcher import L2Dispatcher
+            import json as _json
+
+            synthesizer = TaskSynthesizer()
+            broker = TaskBroker()
+            dispatcher = L2Dispatcher()
+
+            # L1: Analyze text command (may fail if API key invalid)
+            l1_failed = False
+            try:
+                l1_result = synthesizer.analyze(
+                    user_input=command_text,
+                    attachments_metadata=[],
+                    source="web_portal",
+                )
+            except (CriticalAPIFailure, Exception) as l1_err:
+                print(f"⚠️ L1 API OFFLINE — تفعيل وضع التحليل المحلي: {l1_err}")
+                l1_failed = True
+                # Build fallback triage payload so L2 can still process
+                task_id = str(uuid.uuid4())
+                l1_result = {
+                    "task_id": task_id,
+                    "commander_instruction": command_text,
+                    "attachments": [],
+                    "l1_triage": {
+                        "intent": "TEXT_SUMMARIZATION",
+                        "recommended_agent": "general_agent",
+                        "priority": "MEDIUM",
+                        "language": "ar",
+                    },
+                    "source": "web_portal",
+                    "api_fallback": True,
+                }
+
+            # Save to outbox
+            task_id = l1_result.get("task_id", str(uuid.uuid4()))
+            output_filename = f"web_{task_id[:8]}.json"
+            output_path = os.path.join("nawah_outbox", output_filename)
+            with open(output_path, "w", encoding="utf-8") as f:
+                _json.dump(l1_result, f, ensure_ascii=False, indent=4)
+
+            # Register in DB
+            broker.register_task(task_id, output_filename, l1_result)
+
+            # L2: Dispatch to agent (agents have their own graceful degradation)
+            dispatch_result = dispatcher.dispatch(l1_result)
+
+            # Save result to DB (Feedback Loop)
+            ai_response = dispatch_result.get("message", "")
+            dispatch_status = "COMPLETED" if dispatch_result.get("status") == "completed" else "FAILED"
+            broker.update_task_result(task_id, dispatch_status, ai_response)
+
+            # Extract triage info for UI
+            triage = l1_result.get("l1_triage", {})
+            intent_raw = triage.get("intent", "UNKNOWN")
+            agent_raw = triage.get("recommended_agent", "general_agent")
+            intent = intent_raw.value if hasattr(intent_raw, 'value') else str(intent_raw)
+            agent = agent_raw.value if hasattr(agent_raw, 'value') else str(agent_raw)
+
+            result["ai_response"] = ai_response
+            result["triage"] = {
+                "intent": intent,
+                "agent": agent,
+                "task_id": task_id,
+                "api_fallback": l1_failed,
+            }
+            result["text_task"] = {
+                "status": "accepted",
+                "filename": output_filename,
+                "message": f"تم تحليل الأمر → {agent}" + (" [وضع محلي]" if l1_failed else ""),
+            }
+            pipeline_tag = "WEB→L1→L2→DB" if not l1_failed else "WEB→FALLBACK→L2→DB"
+            print(f"🔗 {pipeline_tag}: أمر نصي → مهمة {task_id[:8]} → {agent} → {dispatch_status}")
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            result["text_task"] = {
+                "status": "error",
+                "message": f"فشل المعالجة المباشرة: {e}",
             }
 
     # Summary message
-    accepted_files = sum(1 for u in result["uploads"] if u["status"] == "accepted")
-    blocked_files = sum(1 for u in result["uploads"] if u["status"] == "blocked")
+    accepted_count = sum(1 for u in result["uploads"] if u["status"] == "accepted")
+    blocked_count = sum(1 for u in result["uploads"] if u["status"] == "blocked")
     text_ok = result["text_task"] and result["text_task"]["status"] == "accepted"
 
     parts = []
     if text_ok:
         parts.append("تم استلام الأمر")
-    if accepted_files > 0:
-        parts.append(f"تم قبول {accepted_files} ملف(ات)")
-    if blocked_files > 0:
-        parts.append(f"تم حجر {blocked_files} ملف(ات) خطيرة")
+    if accepted_count > 0:
+        parts.append(f"تم قبول {accepted_count} ملف(ات)")
+    if blocked_count > 0:
+        parts.append(f"تم حجر {blocked_count} ملف(ات) خطيرة")
 
     result["summary"] = " | ".join(parts) if parts else "لا يوجد محتوى للمعالجة"
     result["message"] = "تم الإيداع في النظام بنجاح. الحارس الرقابي سيعالج المهام تلقائياً."
@@ -231,12 +406,34 @@ def health_check():
 
 
 # ============================================================
-# SERVE FRONTEND (web_root/)
+# SERVE FRONTEND (web_root/) — React SPA via Vite Build
 # ============================================================
 WEB_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web_root")
+ASSETS_DIR = os.path.join(WEB_ROOT, "assets")
+
 if os.path.exists(WEB_ROOT):
-    app.mount("/static", StaticFiles(directory=WEB_ROOT), name="static")
+    # Serve /assets/ for Vite's hashed JS/CSS bundles
+    if os.path.exists(ASSETS_DIR):
+        app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+    # Serve nawah_logo if it exists at project root level
+    LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "nawah_logo.png")
+    if os.path.exists(LOGO_PATH):
+        @app.get("/nawah_logo.png")
+        def serve_logo():
+            return FileResponse(LOGO_PATH)
 
     @app.get("/")
     def serve_index():
+        return FileResponse(os.path.join(WEB_ROOT, "index.html"))
+
+    # SPA catch-all: any unmatched GET returns index.html (for React Router)
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        # Don't catch API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        file_path = os.path.join(WEB_ROOT, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
         return FileResponse(os.path.join(WEB_ROOT, "index.html"))

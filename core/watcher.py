@@ -8,6 +8,7 @@ from watchdog.events import FileSystemEventHandler
 from core.synthesizer import TaskSynthesizer
 from core.vision import DocumentReader
 from core.message_bus import TaskBroker
+from core.dispatcher import L2Dispatcher
 
 INBOX_DIR = "nawah_inbox"
 OUTBOX_DIR = "nawah_outbox"
@@ -74,6 +75,7 @@ class NawahEventHandler(FileSystemEventHandler):
         self.synthesizer = TaskSynthesizer()
         self.reader = DocumentReader()
         self.broker = TaskBroker()
+        self.dispatcher = L2Dispatcher()
 
     def process_file(self, filepath):
         ensure_directories()  # Survive mid-operation directory deletion
@@ -93,6 +95,8 @@ class NawahEventHandler(FileSystemEventHandler):
                 docs_text = self.reader.read_files([f])
 
             if docs_text:
+                # Strip BOM character injected by some editors/PowerShell
+                docs_text = docs_text.lstrip('\ufeff')
                 query = f"ملف آلي جديد للتحليل:\n{docs_text}"
                 _, fext = os.path.splitext(filename)
                 file_meta = [{
@@ -101,16 +105,26 @@ class NawahEventHandler(FileSystemEventHandler):
                     "filetype": fext.lower().lstrip('.') or "bin",
                     "size_bytes": os.path.getsize(filepath) if os.path.exists(filepath) else 0
                 }]
-                result = self.synthesizer.analyze(query, file_meta)
+                result = self.synthesizer.analyze(query, file_meta, source="folder")
 
+                # Use task_id from Military Task Order if available
+                task_id = result.get("task_id", os.path.splitext(filename)[0])
                 output_filename = filename + ".json"
                 output_path = os.path.join(OUTBOX_DIR, output_filename)
                 with open(output_path, 'w', encoding='utf-8') as out:
-                    json.dump(result, out, ensure_ascii=False, indent=2)
+                    json.dump(result, out, ensure_ascii=False, indent=4)
 
                 # Register task in L2 message bus
-                task_id = os.path.splitext(output_filename)[0]
                 self.broker.register_task(task_id, output_filename, result)
+
+                # L2 Dispatch — Route to appropriate agent
+                dispatch_result = self.dispatcher.dispatch(result)
+
+                # FEEDBACK LOOP: Save agent result to DB
+                ai_response = dispatch_result.get("message", "")
+                dispatch_status = "COMPLETED" if dispatch_result.get("status") == "completed" else "FAILED"
+                self.broker.update_task_result(task_id, dispatch_status, ai_response)
+                print(f"🔗 FOLDER→L1→L2→DB: مهمة {task_id[:8]} → {dispatch_result.get('agent', '?')} → {dispatch_status}")
 
                 # Prevent archive collision with UUID suffix
                 dest_path = os.path.join(PROCESSED_DIR, filename)

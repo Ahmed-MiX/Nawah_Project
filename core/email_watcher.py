@@ -1,10 +1,13 @@
 import imaplib
+import smtplib
 import email
 import os
 import time
 import json
 import uuid
 from email.header import decode_header
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from datetime import datetime
 from core.vision import DocumentReader
@@ -60,6 +63,45 @@ class EmailWatcher:
         self.email_password = EMAIL_PASSWORD
         self.reader = DocumentReader()
         self.synthesizer = TaskSynthesizer()
+
+    def _send_auto_reply(self, sender, original_subject, ai_response):
+        """Send the AI agent's analysis back to the email sender."""
+        if not self.email_account or not self.email_password or not sender:
+            return
+
+        try:
+            # Extract raw email address from "Name <email>" format
+            import re
+            match = re.search(r'<(.+?)>', sender)
+            recipient = match.group(1) if match else sender.strip()
+
+            msg = MIMEMultipart("alternative")
+            msg["From"] = self.email_account
+            msg["To"] = recipient
+            msg["Subject"] = f"Re: {original_subject} — تحليل نواة الذكي"
+
+            body = (
+                f"السلام عليكم ورحمة الله وبركاته،\n\n"
+                f"تم تحليل رسالتكم بنجاح عبر منظومة نواة للأتمتة الذكية.\n\n"
+                f"{'='*50}\n"
+                f"نتيجة التحليل:\n"
+                f"{'='*50}\n\n"
+                f"{ai_response}\n\n"
+                f"{'='*50}\n"
+                f"مع تحيات منظومة نواة — Enterprise AI v6.0\n"
+                f"هذا رد آلي، يرجى عدم الرد على هذه الرسالة."
+            )
+            msg.attach(MIMEText(body, "plain", "utf-8"))
+
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()
+                server.login(self.email_account, self.email_password)
+                server.send_message(msg)
+
+            print(f"📤 رد آلي: تم إرسال نتيجة التحليل إلى {recipient}")
+
+        except Exception as e:
+            print(f"⚠️ فشل إرسال الرد الآلي: {e}")
 
     def run(self):
         while True:
@@ -167,9 +209,24 @@ class EmailWatcher:
 
                             # Register task in L2 message bus
                             from core.message_bus import TaskBroker
-                            task_id = os.path.splitext(output_filename)[0]
+                            from core.dispatcher import L2Dispatcher
+
+                            task_id = result.get("task_id", os.path.splitext(output_filename)[0])
                             broker = TaskBroker()
                             broker.register_task(task_id, output_filename, result)
+
+                            # L2 Dispatch — Route to appropriate agent
+                            dispatcher = L2Dispatcher()
+                            dispatch_result = dispatcher.dispatch(result)
+
+                            # FEEDBACK LOOP: Save agent result to DB
+                            ai_response = dispatch_result.get("message", "")
+                            dispatch_status = "COMPLETED" if dispatch_result.get("status") == "completed" else "FAILED"
+                            broker.update_task_result(task_id, dispatch_status, ai_response)
+                            print(f"🔗 EMAIL→L1→L2→DB: مهمة {task_id[:8]} → {dispatch_result.get('agent', '?')} → {dispatch_status}")
+
+                            # AUTO-REPLY: Send AI analysis back to the sender
+                            self._send_auto_reply(sender, subject, ai_response)
 
                             print(f"✅ رادار البريد: تمت أتمتة الإيميل ومرفقاته بنجاح [{subject}]")
 

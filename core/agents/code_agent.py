@@ -1,0 +1,89 @@
+"""
+Nawah L2 Code Agent — LIVE AI Logic
+
+Handles: CODE_ANALYSIS
+Senior software engineer brain: reviews code, explains logic,
+identifies bugs & security issues, suggests improvements.
+"""
+import os
+import traceback
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
+from core.base_agent import BaseAgent
+from core.api_router import LLMFailoverRouter, CriticalAPIFailure
+from core.synthesizer import truncate_prompt
+
+MAX_FILE_CHARS = 15000
+
+SYSTEM_PROMPT = (
+    "أنت مهندس برمجيات أول متخصص في مراجعة الكود وتحليل البرمجيات في نظام نواة.\n"
+    "قواعد صارمة:\n"
+    "1. حلل الكود المقدم بدقة وحدد لغة البرمجة المستخدمة.\n"
+    "2. اشرح منطق الكود خطوة بخطوة بالعربية الفصحى.\n"
+    "3. حدد الأخطاء البرمجية (Bugs) إن وُجدت مع شرح سبب المشكلة.\n"
+    "4. قيّم الثغرات الأمنية (SQL Injection, XSS, Buffer Overflow, etc.).\n"
+    "5. اقترح تحسينات على الأداء وقابلية الصيانة.\n"
+    "6. قدم الكود المُحسّن إذا طُلب ذلك.\n"
+    "7. استخدم تنسيق Markdown مع كتل الكود (```) لعرض الأمثلة.\n"
+    "8. إذا كان المحتوى ليس كوداً برمجياً، اذكر ذلك صراحة."
+)
+
+
+class CodeAgent(BaseAgent):
+    """Live L2 Agent — Code review, bug detection, and security analysis."""
+    agent_name = "code_agent"
+    agent_icon = "💻"
+
+    def __init__(self):
+        try:
+            self.router = LLMFailoverRouter()
+        except Exception:
+            self.router = None
+
+    def _read_file(self, file_path):
+        if not file_path or not os.path.exists(file_path):
+            return ""
+        try:
+            with open(file_path, "r", encoding="utf-8-sig") as f:
+                return f.read()
+        except Exception:
+            return ""
+
+    def process(self, task_payload: dict) -> dict:
+        task_id = task_payload.get("task_id", "unknown")
+        instruction = task_payload.get("commander_instruction", "")
+        attachments = task_payload.get("attachments", [])
+
+        try:
+            if not self.router:
+                raise CriticalAPIFailure("No API keys available")
+
+            file_content = ""
+            file_name = "N/A"
+            if attachments:
+                att = attachments[0]
+                fp = att.get("file_path", "") if isinstance(att, dict) else getattr(att, "file_path", "")
+                file_name = att.get("file_name", "N/A") if isinstance(att, dict) else getattr(att, "file_name", "N/A")
+                file_content = truncate_prompt(self._read_file(fp), MAX_FILE_CHARS)
+
+            human_msg = f"تعليمات القائد: {instruction}\n\n"
+            if file_content:
+                human_msg += f"الكود المصدري ({file_name}):\n```\n{file_content}\n```"
+
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", SYSTEM_PROMPT), ("human", "{input}")
+            ])
+
+            def call_with_key(api_key):
+                llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, google_api_key=api_key)
+                return (prompt | llm).invoke({"input": human_msg}).content
+
+            result = self.router.execute(call_with_key)
+            print(f"💻 CodeAgent: مراجعة كود مكتملة — {len(result)} حرف")
+            return self._success(task_id, f"💻 مراجعة الكود مكتملة ({len(result)} حرف):\n\n{result}")
+
+        except CriticalAPIFailure:
+            return self._success(task_id, f"💻 [MOCK/SIMULATED - API OFFLINE] تحليل برمجي محاكى للمهمة {task_id[:8]}. سيتم تفعيل محرك الكود عند توفر مفاتيح API.")
+        except Exception as e:
+            traceback.print_exc()
+            return self._fail(task_id, f"خطأ غير متوقع: {e}")

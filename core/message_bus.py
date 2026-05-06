@@ -41,7 +41,7 @@ class TaskBroker:
         return conn
 
     def _init_db(self):
-        """Create the tasks table if it doesn't exist."""
+        """Create the tasks table if it doesn't exist. Migrate schema if needed."""
         conn = self._get_conn()
         try:
             conn.execute("""
@@ -53,9 +53,15 @@ class TaskBroker:
                     dossier TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    error_message TEXT
+                    error_message TEXT,
+                    result TEXT
                 )
             """)
+            # Migration: add result column if table existed before this version
+            try:
+                conn.execute("ALTER TABLE tasks ADD COLUMN result TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             conn.commit()
         finally:
             conn.close()
@@ -167,6 +173,28 @@ class TaskBroker:
         finally:
             conn.close()
 
+    def update_task_result(self, task_id, status, result_text):
+        """
+        Store the L2 agent's final output and update task state.
+
+        Args:
+            task_id: UUID of the task
+            status: 'COMPLETED' or 'FAILED'
+            result_text: The AI agent's full response text
+        """
+        conn = self._get_conn()
+        try:
+            now = datetime.now().isoformat()
+            state = TaskState.COMPLETED.value if status == "COMPLETED" else TaskState.FAILED.value
+            conn.execute(
+                "UPDATE tasks SET state = ?, result = ?, updated_at = ? WHERE task_id = ?",
+                (state, result_text, now, task_id)
+            )
+            conn.commit()
+            print(f"💾 TaskBroker: نتيجة المهمة {task_id[:8]} → {state}")
+        finally:
+            conn.close()
+
     def fail_task(self, task_id, error_message=""):
         """Mark a task as FAILED with an error message."""
         conn = self._get_conn()
@@ -212,7 +240,7 @@ class TaskBroker:
         conn = self._get_conn()
         try:
             rows = conn.execute(
-                "SELECT task_id, state, dossier, created_at FROM tasks ORDER BY created_at DESC LIMIT ?",
+                "SELECT task_id, state, dossier, created_at, result FROM tasks ORDER BY created_at DESC LIMIT ?",
                 (limit,)
             ).fetchall()
             results = []
@@ -221,15 +249,21 @@ class TaskBroker:
                     dossier = json.loads(row["dossier"])
                     intent = dossier.get("intent", "—")
                     complexity = dossier.get("complexity", "—")
+                    # Extract from l1_triage if present (new schema)
+                    triage = dossier.get("l1_triage", {})
+                    if triage:
+                        intent = triage.get("intent", intent)
+                        complexity = triage.get("complexity", complexity)
                 except Exception:
                     intent = "—"
                     complexity = "—"
                 results.append({
                     "task_id": row["task_id"][:16] + "...",
                     "state": row["state"],
-                    "intent": intent[:40],
-                    "complexity": complexity,
-                    "created_at": row["created_at"][:16]
+                    "intent": str(intent)[:40],
+                    "complexity": str(complexity),
+                    "created_at": row["created_at"][:16],
+                    "has_result": bool(row["result"]),
                 })
             return results
         finally:
