@@ -1,20 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="نَوَاة — منظومة أتمتة المؤسسات الذكية | مركز القيادة والسيطرة" />
+    <title>نواة | مركز القيادة</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    <script type="module" crossorigin src="/assets/index-6bH_YhlY.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-1gRmiab2.css">
+    <style>
+      /* Hide original blue square logo components */
+      .flex.items-center.gap-3 > div.w-10.h-10.rounded-xl,
+      .flex.items-center.gap-3 > div.w-8.h-8.rounded-lg,
+      .flex.items-center.gap-3 > div.h-8.w-8.rounded-lg {
+        background: transparent !important;
+        box-shadow: none !important;
+        position: relative !important;
+        overflow: hidden !important;
+        border: none !important;
+      }
 
-  <!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <meta name="description" content="نَوَاة — منظومة أتمتة المؤسسات الذكية | مركز القيادة والسيطرة" />
-      <title>نواة | مركز القيادة</title>
-      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-      <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-      <script type="module" crossorigin src="/assets/index-6bH_YhlY.js"></script>
-      <link rel="stylesheet" crossorigin href="/assets/index-1gRmiab2.css">
+      /* Hide the Arabic letter 'ن' inside the container */
+      .flex.items-center.gap-3 > div.w-10.h-10.rounded-xl span,
+      .flex.items-center.gap-3 > div.w-8.h-8.rounded-lg span,
+      .flex.items-center.gap-3 > div.h-8.w-8.rounded-lg span {
+        display: none !important;
+      }
+
+      /* Inject the new SVG logo using a pseudo-element */
+      .flex.items-center.gap-3 > div.w-10.h-10.rounded-xl::before,
+      .flex.items-center.gap-3 > div.w-8.h-8.rounded-lg::before,
+      .flex.items-center.gap-3 > div.h-8.w-8.rounded-lg::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-image: url('/light_logo.svg');
+        transition: background-image 0.3s ease;
+      }
+
+      /* Dark mode switching via class */
+      .dark .flex.items-center.gap-3 > div.w-10.h-10.rounded-xl::before,
+      .dark .flex.items-center.gap-3 > div.w-8.h-8.rounded-lg::before,
+      .dark .flex.items-center.gap-3 > div.h-8.w-8.rounded-lg::before {
+        background-image: url('/dark_logo.svg') !important;
+      }
+    </style>
+      <script>
+        // Sync application theme state with a global CSS class
+        (function() {
+          function updateThemeClass() {
+            let theme = localStorage.getItem('nawah-theme');
+            if (!theme) {
+              theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            if (theme === 'dark') {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          }
+
+          // Initial sync
+          updateThemeClass();
+
+          // Listen for storage changes from other tabs
+          window.addEventListener('storage', (e) => {
+            if (e.key === 'nawah-theme') updateThemeClass();
+          });
+
+          // Intercept localStorage.setItem to react instantly to theme toggles
+          const originalSetItem = localStorage.setItem;
+          localStorage.setItem = function(key, value) {
+            originalSetItem.apply(this, arguments);
+            if (key === 'nawah-theme') updateThemeClass();
+          };
+
+          // Periodically check as a fallback for internal React state changes
+          setInterval(updateThemeClass, 500);
+        })();
+      </script>
     </head>
 
-    <body>
-      <div id="root"></div>
-    </body>
-  </html>
-  
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
