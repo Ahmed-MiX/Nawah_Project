@@ -30,9 +30,11 @@ SYSTEM_PROMPT = (
 
 
 class NegotiatorAgent(BaseAgent):
-    """L3 Executive Agent — Salary & Benefits Negotiator."""
+    """L3 Executive Agent — Salary & Benefits Negotiator with Deadlock Breaker."""
     agent_name = "negotiator_agent"
     agent_icon = "💼"
+
+    MAX_TURNS = 3  # Deadlock after 3 counter-offers
 
     def __init__(self):
         try:
@@ -42,6 +44,12 @@ class NegotiatorAgent(BaseAgent):
         self.persona = get_persona_manager()
         self.guardrail = get_compliance_guardrail()
         self.erp = get_erp_tool()
+        # Stateful negotiation memory
+        self.turn_count = 0
+        self.negotiation_history = []
+        self.deadlock_reached = False
+        self.salary_range = None
+        self.current_offer = 0
 
     def process(self, task_payload: dict) -> dict:
         task_id = task_payload.get("task_id", "unknown")
@@ -50,10 +58,16 @@ class NegotiatorAgent(BaseAgent):
         candidate_name = task_payload.get("candidate_name", "المرشح")
         budget_cap = task_payload.get("budget_cap", 30000)
         seniority = task_payload.get("seniority", "mid")
+        job_id = task_payload.get("job_id", "JD-AI-001")
 
         try:
             if not self.router:
                 raise CriticalAPIFailure("No API keys")
+
+            # Fetch salary range FIRST (Finance Hard-Lock)
+            self.salary_range = self.erp.get_approved_salary_range(job_id)
+            max_salary = self.salary_range["salary_max"]
+            budget_cap = min(budget_cap, max_salary)
 
             # Authorize budget via FinancialHardCap
             self.guardrail.financial_cap.authorize_budget(task_id, budget_cap, "finance_agent")
@@ -65,6 +79,7 @@ class NegotiatorAgent(BaseAgent):
                 f"{thought}\n\n"
                 f"تفاوض مع المرشح: {candidate_name}\n"
                 f"الميزانية المعتمدة: {budget_cap:,.0f} ر.س\n"
+                f"الحد الأقصى المطلق: {max_salary:,.0f} ر.س (لا يمكن تجاوزه)\n"
                 f"المستوى: {seniority}\n"
                 f"التعليمات: {instruction}"
             )
@@ -78,7 +93,6 @@ class NegotiatorAgent(BaseAgent):
 
             result = self.router.execute(call_with_key)
 
-            # Governance + Anti-Bias
             verdict = self.guardrail.check("negotiator_agent", result, {
                 "task_id": task_id, "salary_offer": budget_cap * 0.8, "seniority": seniority
             })
@@ -89,19 +103,104 @@ class NegotiatorAgent(BaseAgent):
             return self._success(task_id, f"💼 تقرير التفاوض:\n\n{result}")
 
         except CriticalAPIFailure:
-            return self._mock_negotiation(task_id, instruction, candidate_name, budget_cap, seniority)
+            return self._mock_negotiation(task_id, instruction, candidate_name, budget_cap, seniority, job_id)
         except Exception as e:
             traceback.print_exc()
             return self._fail(task_id, f"خطأ في التفاوض: {e}")
 
-    def _mock_negotiation(self, task_id, instruction, candidate_name, budget_cap, seniority):
-        """Full mock negotiation pipeline."""
+    # ============================================================
+    # INTERACTIVE NEGOTIATION (multi-turn with deadlock breaker)
+    # ============================================================
+    def negotiate(self, candidate_demand: int, job_id: str = "JD-AI-001") -> dict:
+        """
+        Single negotiation turn. Call repeatedly to simulate multi-turn.
+        Returns: {"status": "COUNTER"|"ACCEPTED"|"DEADLOCK", "offer": int, ...}
+        """
+        # Fetch salary range if not yet loaded
+        if not self.salary_range:
+            self.salary_range = self.erp.get_approved_salary_range(job_id)
+
+        max_salary = self.salary_range["salary_max"]
+        min_salary = self.salary_range["salary_min"]
+
+        # Check deadlock
+        if self.deadlock_reached:
+            return {
+                "status": "DEADLOCK",
+                "turn": self.turn_count,
+                "message": "DEADLOCK REACHED: Offer Withdrawn. Negotiation terminated.",
+                "offer": 0,
+            }
+
+        self.turn_count += 1
+        self.negotiation_history.append({
+            "turn": self.turn_count,
+            "candidate_demand": candidate_demand,
+        })
+
+        # Finance Hard-Lock: NEVER exceed max
+        if candidate_demand <= max_salary:
+            # Candidate within range → accept
+            final = min(candidate_demand, max_salary)
+            self.current_offer = final
+            print(f"💼 Negotiation Turn {self.turn_count}: طلب {candidate_demand:,} ≤ حد {max_salary:,} → ✅ ACCEPTED")
+            return {
+                "status": "ACCEPTED",
+                "turn": self.turn_count,
+                "offer": final,
+                "message": f"✅ تم قبول العرض: {final:,} ر.س",
+                "within_budget": True,
+            }
+
+        # Candidate demands above max
+        if self.turn_count >= self.MAX_TURNS:
+            # DEADLOCK — 3 turns exhausted
+            self.deadlock_reached = True
+            print(f"💼 Negotiation Turn {self.turn_count}: ⛔ DEADLOCK — {self.MAX_TURNS} turns exhausted")
+            return {
+                "status": "DEADLOCK",
+                "turn": self.turn_count,
+                "offer": 0,
+                "message": "DEADLOCK REACHED: Offer Withdrawn. Negotiation terminated.",
+                "candidate_last_demand": candidate_demand,
+                "max_allowed": max_salary,
+            }
+
+        # Counter-offer: escalate gradually but NEVER exceed max
+        escalation = [0.80, 0.90, 0.95]
+        pct = escalation[min(self.turn_count - 1, len(escalation) - 1)]
+        counter = int(max_salary * pct)
+        self.current_offer = counter
+
+        print(
+            f"💼 Negotiation Turn {self.turn_count}: طلب {candidate_demand:,} > حد {max_salary:,} "
+            f"→ عرض مضاد {counter:,} ({pct*100:.0f}%)"
+        )
+        return {
+            "status": "COUNTER",
+            "turn": self.turn_count,
+            "offer": counter,
+            "message": (
+                f"عرض مضاد: {counter:,} ر.س + مزايا إضافية (تأمين VIP، بدل سكن {int(counter*0.25):,} ر.س). "
+                f"الحد الأقصى المعتمد: {max_salary:,} ر.س. لا يمكن تجاوزه."
+            ),
+            "max_allowed": max_salary,
+            "candidate_demand": candidate_demand,
+        }
+
+    def _mock_negotiation(self, task_id, instruction, candidate_name, budget_cap, seniority, job_id="JD-AI-001"):
+        """Full mock negotiation pipeline with Finance Hard-Lock."""
+        # Fetch salary range
+        salary_range = self.erp.get_approved_salary_range(job_id)
+        max_salary = salary_range["salary_max"]
+        budget_cap = min(budget_cap, max_salary)
+
         # Authorize budget
         self.guardrail.financial_cap.authorize_budget(task_id, budget_cap, "finance_agent")
 
-        initial_offer = int(budget_cap * 0.80)
-        counter_offer = int(budget_cap * 0.95)
-        final_offer = int(budget_cap * 0.90)
+        initial_offer = int(max_salary * 0.80)
+        counter_offer = int(max_salary * 0.95)
+        final_offer = int(max_salary * 0.90)
 
         # Check final offer against hard cap
         approved, reason = self.guardrail.financial_cap.check_offer(task_id, final_offer, seniority)
@@ -118,7 +217,8 @@ class NegotiatorAgent(BaseAgent):
             f"💼 [L3 EXECUTIVE DECISION — SALARY NEGOTIATION]\n\n"
             f"## تقرير التفاوض — مهمة {task_id[:8]}\n\n"
             f"**المرشح:** {candidate_name}\n"
-            f"**الميزانية المعتمدة:** {budget_cap:,.0f} ر.س\n\n"
+            f"**الميزانية المعتمدة:** {budget_cap:,.0f} ر.س\n"
+            f"**الحد الأقصى (ERP):** {max_salary:,} ر.س\n\n"
             f"---\n\n"
             f"### 📊 مراحل التفاوض\n\n"
             f"| المرحلة | العرض (ر.س) | الحالة |\n"
@@ -162,3 +262,4 @@ class NegotiatorAgent(BaseAgent):
             f"_⚠️ محاكاة — API مطلوب للتفاوض الحقيقي._"
         )
         return self._success(task_id, mock)
+

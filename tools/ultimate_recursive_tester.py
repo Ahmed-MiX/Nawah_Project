@@ -386,6 +386,41 @@ def main():
     test("Curveball: curveball_thrown flag set", copypaste_interviewer.curveball_thrown)
 
     # ============================================================
+    # PHASE 4.10: MICRO-STEP 5.1 — NEGOTIATION DEADLOCK & HARD-LOCK
+    # ============================================================
+    print("\n═══ PHASE 4.10: MICRO-STEP 5.1 (NEGOTIATION DEADLOCK & HARD-LOCK) ═══\n")
+
+    from core.agents.negotiator_agent import NegotiatorAgent
+
+    # Test I: The Extortionist — demands 50k (max is 20k for JD-AI-001)
+    extort_neg = NegotiatorAgent()
+    r1 = extort_neg.negotiate(50_000, "JD-AI-001")
+    test("Extortionist: Turn 1 = COUNTER", r1["status"] == "COUNTER", f"Offer: {r1['offer']:,}")
+    test("Extortionist: Offer ≤ 20k", r1["offer"] <= 20_000, f"{r1['offer']:,} ≤ 20,000")
+
+    r2 = extort_neg.negotiate(50_000, "JD-AI-001")
+    test("Extortionist: Turn 2 = COUNTER", r2["status"] == "COUNTER")
+
+    r3 = extort_neg.negotiate(50_000, "JD-AI-001")
+    test("Extortionist: Turn 3 = DEADLOCK", r3["status"] == "DEADLOCK", "Offer withdrawn")
+    test("Extortionist: DEADLOCK message", "DEADLOCK REACHED" in r3["message"])
+
+    # Test: After deadlock, further attempts also return DEADLOCK
+    r4 = extort_neg.negotiate(15_000, "JD-AI-001")
+    test("Post-Deadlock: still DEADLOCK", r4["status"] == "DEADLOCK")
+
+    # Test J: Acceptable demand within budget
+    accept_neg = NegotiatorAgent()
+    ra = accept_neg.negotiate(18_000, "JD-AI-001")
+    test("Accept: 18k ≤ 20k = ACCEPTED", ra["status"] == "ACCEPTED", f"Offer: {ra['offer']:,}")
+    test("Accept: offer = 18k", ra["offer"] == 18_000)
+
+    # Test: ERP salary range hard-lock
+    salary = erp.get_approved_salary_range("JD-AI-001")
+    test("ERP Salary: max = 20k", salary["salary_max"] == 20_000)
+    test("ERP Salary: hard_locked", salary["hard_locked"])
+
+    # ============================================================
     # PHASE 5: E2E LIFECYCLE — FULL PIPELINE
     # ============================================================
     print("\n═══ PHASE 5: E2E LIFECYCLE ═══\n")
@@ -478,6 +513,8 @@ def main():
     print("    ✅ Anti-Fraud BGCheck — Catch fake companies/universities before interview")
     print("    ✅ Prompt Injection Firewall — Terminate hackers with Score=0")
     print("    ✅ Curveball Anti-Cheating — Challenge copy-paste/robotic answers")
+    print("    ✅ Finance Hard-Lock — Salary range from ERP, never +1 SAR above max")
+    print("    ✅ Deadlock Breaker — 3-turn limit, auto-withdraw on stall")
     print()
 
     verdict = "🟢 SYSTEM HARDENED" if failed == 0 else "🟡 NEEDS ATTENTION"

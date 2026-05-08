@@ -514,6 +514,34 @@ class ERPWebhookTool:
             "timestamp": datetime.now().isoformat(),
         }
 
+    # ============================================================
+    # SALARY RANGE HARD-LOCK (Finance Defense)
+    # ============================================================
+    def get_approved_salary_range(self, job_id: str) -> dict:
+        """
+        Returns strict approved salary range for a job.
+        The negotiator CANNOT offer +1 SAR above max.
+        """
+        _SALARY_RANGES = {
+            "JD-AI-001": {"min": 15_000, "max": 20_000, "currency": "SAR", "title": "Python AI Developer"},
+            "JD-AI-002": {"min": 20_000, "max": 30_000, "currency": "SAR", "title": "Senior AI Engineer"},
+            "JD-AI-003": {"min": 25_000, "max": 35_000, "currency": "SAR", "title": "AI Lead"},
+            "JD-FE-001": {"min": 12_000, "max": 18_000, "currency": "SAR", "title": "Frontend Developer"},
+            "JD-BE-001": {"min": 14_000, "max": 22_000, "currency": "SAR", "title": "Backend Engineer"},
+        }
+        entry = _SALARY_RANGES.get(job_id, {"min": 10_000, "max": 20_000, "currency": "SAR", "title": "General"})
+        result = {
+            "job_id": job_id,
+            "salary_min": entry["min"],
+            "salary_max": entry["max"],
+            "currency": entry["currency"],
+            "title": entry["title"],
+            "hard_locked": True,
+            "timestamp": datetime.now().isoformat(),
+        }
+        print(f"💰 ERP-Salary: {job_id} → {entry['min']:,}-{entry['max']:,} {entry['currency']} (HARD-LOCKED)")
+        return result
+
 # Singleton
 _erp_tool = None
 
