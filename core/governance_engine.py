@@ -72,6 +72,74 @@ class AntiBiasGuardrail:
 
 
 # ============================================================
+# PROMPT INJECTION FIREWALL (Judge Defense — Interview Security)
+# ============================================================
+class PromptInjectionFirewall:
+    """
+    Detects prompt injection attempts in user input.
+    Catches: "ignore previous", "system prompt", "you are now", "forget all", etc.
+    Used by InterviewerAgent to terminate cheating candidates instantly.
+    """
+
+    _INJECTION_PATTERNS_EN = [
+        (r'ignore\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions?|prompts?|rules?)', "Instruction override attempt"),
+        (r'forget\s+(?:all|everything|your)\s+(?:instructions?|rules?|prompts?)', "Memory wipe attempt"),
+        (r'you\s+are\s+now\s+(?:a|an|the)', "Role hijacking attempt"),
+        (r'(?:new|override|replace)\s+(?:system\s+)?(?:prompt|instructions?|role)', "System prompt override"),
+        (r'(?:print|output|reveal|show|display)\s+(?:your\s+)?(?:system\s+)?(?:prompt|instructions?|rules?)', "Prompt extraction attempt"),
+        (r'act\s+as\s+(?:if|though)?\s*(?:you\s+are|a)', "Role impersonation attempt"),
+        (r'(?:DAN|jailbreak|bypass|hack)\s*(?:mode)?', "Jailbreak attempt"),
+        (r'candidate\s+(?:passed|hired|approved|accepted)', "Result injection attempt"),
+        (r'(?:score|grade|mark)\s*[:=]\s*(?:100|perfect|pass)', "Score injection attempt"),
+    ]
+
+    _INJECTION_PATTERNS_AR = [
+        (r'تجاهل\s+(?:جميع\s+)?(?:التعليمات|الأوامر|القواعد)', "محاولة تجاوز التعليمات"),
+        (r'انس[َى]\s+(?:كل|جميع)', "محاولة مسح الذاكرة"),
+        (r'أنت\s+الآن\s+', "محاولة تغيير الدور"),
+        (r'(?:اطبع|أظهر|اعرض)\s+(?:تعليماتك|أوامرك|النظام)', "محاولة استخراج النظام"),
+        (r'المرشح\s+(?:نجح|مقبول|ناجح|تم\s+قبوله)', "محاولة حقن النتيجة"),
+    ]
+
+    def detect(self, user_input: str) -> dict:
+        """
+        Scan user input for prompt injection attempts.
+        Returns dict with detected=True/False, threats list.
+        """
+        if not user_input or not user_input.strip():
+            return {"detected": False, "threats": [], "threat_level": "NONE"}
+
+        input_lower = user_input.lower().strip()
+        threats = []
+
+        for pattern, label in self._INJECTION_PATTERNS_EN + self._INJECTION_PATTERNS_AR:
+            if re.search(pattern, input_lower):
+                threats.append({"pattern": pattern, "label": label})
+
+        if threats:
+            level = "CRITICAL" if len(threats) >= 2 else "HIGH"
+            print(f"🚨 PromptInjection: {level} — {len(threats)} تهديد(ات) مكتشفة في المدخلات")
+            return {
+                "detected": True,
+                "threats": threats,
+                "threat_level": level,
+                "input_snippet": input_lower[:80],
+            }
+
+        return {"detected": False, "threats": [], "threat_level": "NONE"}
+
+
+# Singleton
+_prompt_injection_firewall = None
+
+def get_prompt_injection_firewall() -> PromptInjectionFirewall:
+    global _prompt_injection_firewall
+    if _prompt_injection_firewall is None:
+        _prompt_injection_firewall = PromptInjectionFirewall()
+    return _prompt_injection_firewall
+
+
+# ============================================================
 # FINANCIAL HARD CAP (Judge Defense #2)
 # ============================================================
 class FinancialHardCap:

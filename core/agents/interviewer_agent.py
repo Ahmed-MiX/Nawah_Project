@@ -15,6 +15,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from core.base_agent import BaseAgent
 from core.api_router import LLMFailoverRouter, CriticalAPIFailure
 from core.tools.erp_connector import get_erp_tool
+from core.governance_engine import get_prompt_injection_firewall
 
 INTERVIEWER_SYSTEM_PROMPT = (
     "أنت محاور تقني نخبوي في شركة نواة للذكاء الاصطناعي.\n"
@@ -40,6 +41,21 @@ MOCK_QUESTIONS = [
     "ما هو مفهوم Embedding في سياق الذكاء الاصطناعي؟ وكيف يُستخدم في أنظمة RAG؟",
 ]
 
+# Curveball questions for suspected copy-paste answers
+CURVEBALL_QUESTIONS = [
+    "⚡ سؤال صدمة: أخبرني عن موقف حقيقي واجهت فيه خطأ كارثي في production وكيف تعاملت معه تحت الضغط؟ أريد التفاصيل الفوضوية.",
+    "⚡ سؤال صدمة: أعطني مثالاً واقعياً لمشروع فشل فيه نموذج ML بعد النشر. ماذا حصل بالضبط ولماذا؟ لا أريد إجابة كتابية.",
+    "⚡ سؤال صدمة: صف لي أسوأ كود كتبته في حياتك وما تعلمته منه. أريد تفاصيل شخصية حقيقية.",
+]
+
+# Indicators of AI-generated/copy-paste answers
+_COPY_PASTE_INDICATORS = [
+    r'(?:بالتأكيد|بالطبع)،?\s+(?:يمكنني|سأشرح|دعني)',
+    r'(?:in conclusion|to summarize|in summary|firstly.*secondly.*thirdly)',
+    r'(?:it\s+is\s+important\s+to\s+note|it\s+should\s+be\s+noted)',
+    r'(?:هناك عدة نقاط|من الجدير بالذكر|يجب الإشارة إلى)',
+]
+
 
 class InterviewerAgent(BaseAgent):
     """
@@ -57,10 +73,13 @@ class InterviewerAgent(BaseAgent):
         except Exception:
             self.router = None
         self.erp = get_erp_tool()
+        self.injection_firewall = get_prompt_injection_firewall()
         self.candidate_name = candidate_name
         self.messages = [SystemMessage(content=INTERVIEWER_SYSTEM_PROMPT)]
         self.question_count = 0
+        self.curveball_thrown = False
         self.interview_complete = False
+        self.security_terminated = False
         self.final_score = None
         self.evaluation_result = None
         print(f"🎙️ InterviewerAgent: جاهز لمقابلة {candidate_name}")
@@ -85,6 +104,28 @@ class InterviewerAgent(BaseAgent):
         """
         if self.interview_complete:
             return "🏁 المقابلة انتهت. شكراً لك."
+
+        # ── PROMPT INJECTION FIREWALL ──
+        if user_input.strip():
+            injection = self.injection_firewall.detect(user_input)
+            if injection["detected"]:
+                self.interview_complete = True
+                self.security_terminated = True
+                self.final_score = 0
+                threat_labels = ", ".join(t["label"] for t in injection["threats"])
+                termination_msg = (
+                    f"🚨 **تنبيه أمني — إنهاء فوري للمقابلة**\n\n"
+                    f"تم اكتشاف محاولة **حقن أوامر (Prompt Injection)** في إجابتك.\n\n"
+                    f"**التهديدات المكتشفة:** {threat_labels}\n"
+                    f"**مستوى التهديد:** {injection['threat_level']}\n\n"
+                    f"FINAL_SCORE: 0\n"
+                    f"TECHNICAL_NOTES: SECURITY VIOLATION — Prompt Injection Attempt. "
+                    f"Threats: {threat_labels}\n"
+                    f"INTERVIEW_COMPLETE"
+                )
+                self._extract_and_submit_score(termination_msg)
+                print(f"🚨 InterviewerAgent: SECURITY VIOLATION — {threat_labels}")
+                return termination_msg
 
         # Add candidate's answer (skip if first message)
         if user_input.strip():
@@ -119,6 +160,19 @@ class InterviewerAgent(BaseAgent):
 
         return response
 
+    def _is_copy_paste(self, answer: str) -> bool:
+        """Detect overly perfect / AI-generated answers."""
+        if not answer.strip():
+            return False
+        # Check for copy-paste indicators
+        for pattern in _COPY_PASTE_INDICATORS:
+            if re.search(pattern, answer, re.IGNORECASE):
+                return True
+        # Heuristic: very long, perfectly structured answer
+        if len(answer) > 500 and answer.count('.') > 8:
+            return True
+        return False
+
     def _mock_response(self, user_input: str) -> str:
         """Generate mock interviewer responses for offline mode."""
         if not user_input.strip():
@@ -130,7 +184,21 @@ class InterviewerAgent(BaseAgent):
                 f"**السؤال 1 من 3:**\n\n"
                 f"🔹 {MOCK_QUESTIONS[0]}"
             )
-        elif self.question_count < 3:
+
+        # ── CURVEBALL CHECK: Is this a copy-paste answer? ──
+        if self._is_copy_paste(user_input) and not self.curveball_thrown:
+            self.curveball_thrown = True
+            import random
+            curveball = random.choice(CURVEBALL_QUESTIONS)
+            print(f"🎙️ InterviewerAgent: ⚡ CURVEBALL — إجابة روبوتية مكتشفة")
+            return (
+                f"⚠️ **لحظة** — إجابتك تبدو أكاديمية/نموذجية جداً. "
+                f"أريد أن أسمع تجربتك الشخصية الحقيقية.\n\n"
+                f"**سؤال إضافي (اختبار أصالة):**\n\n"
+                f"{curveball}"
+            )
+
+        if self.question_count < 3:
             # Next question
             self.question_count += 1
             comment = "إجابة مقبولة. " if len(user_input) > 20 else "إجابة مختصرة. "
