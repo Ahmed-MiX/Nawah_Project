@@ -140,3 +140,127 @@ class LegalAgent(BaseAgent):
         except Exception as e:
             traceback.print_exc()
             return self._fail(task_id, f"خطأ في المراجعة القانونية: {e}")
+
+    # ============================================================
+    # IMMUTABLE CONTRACT TEMPLATE (Anti-Hallucination Protocol)
+    # ============================================================
+    _CONTRACT_TEMPLATE = """
+# عقد عمل — نظام نواة للأتمتة المؤسسية
+
+**رقم العقد:** {contract_id}
+**التاريخ:** {date}
+
+---
+
+## الطرف الأول (صاحب العمل)
+شركة نواة للأتمتة المؤسسية، سجل تجاري رقم 1010XXXXXX، الرياض، المملكة العربية السعودية.
+
+## الطرف الثاني (الموظف)
+**الاسم:** {candidate_name}
+**المسمى الوظيفي:** {job_title}
+**القسم:** {department}
+
+---
+
+## المادة الأولى — مدة العقد
+يبدأ هذا العقد من تاريخ {start_date} لمدة سنتين قابلة للتجديد وفقاً لنظام العمل السعودي.
+
+## المادة الثانية — الراتب والمزايا
+- **الراتب الشهري الأساسي:** {final_salary} ريال سعودي
+- **بدل السكن:** {housing_allowance} ريال سعودي (25%)
+- **بدل النقل:** {transport_allowance} ريال سعودي
+- **التأمين الطبي:** تأمين VIP يشمل العائلة
+- **إجازة سنوية:** 25 يوم عمل
+
+## المادة الثالثة — فترة التجربة
+فترة تجربة 90 يوماً وفقاً للمادة 53 من نظام العمل السعودي.
+
+## المادة الرابعة — ساعات العمل
+48 ساعة أسبوعياً (8 ساعات يومياً) وفقاً للمادة 98 من نظام العمل.
+
+## المادة الخامسة — السرية
+يلتزم الموظف بعدم إفشاء أي معلومات سرية تتعلق بالشركة أثناء وبعد انتهاء العقد.
+
+## المادة السادسة — الإنهاء
+يجوز لأي طرف إنهاء العقد بإشعار مسبق مدته 60 يوماً وفقاً للمادة 75 من نظام العمل السعودي.
+
+## المادة السابعة — القانون الحاكم
+يخضع هذا العقد لنظام العمل السعودي الصادر بالمرسوم الملكي رقم م/51.
+
+---
+
+**توقيع الطرف الأول:** _________________ (إدارة الموارد البشرية — نواة)
+
+**توقيع الطرف الثاني:** _________________ ({candidate_name})
+
+---
+_🛡️ هذا العقد مُولّد آلياً من قالب ثابت — لا تُضاف بنود خارجية._
+"""
+
+    # Allowed variable keys in the template
+    _ALLOWED_VARS = {
+        "contract_id", "date", "candidate_name", "job_title", "department",
+        "start_date", "final_salary", "housing_allowance", "transport_allowance",
+    }
+
+    # Forbidden phrases that indicate LLM hallucination
+    _FORBIDDEN_CLAUSES = [
+        "non-compete", "غرامة مالية",
+        "تعويض ضرر", "penalty clause", "unlimited liability",
+        "بند جزائي", "حبس", "imprisonment",
+    ]
+
+    def generate_employment_contract(
+        self, candidate_name: str, job_title: str, final_salary: int,
+        department: str = "قسم الذكاء الاصطناعي", start_date: str = ""
+    ) -> dict:
+        """
+        Generate an employment contract from the IMMUTABLE template.
+        NO LLM involved — pure variable injection. Zero hallucination risk.
+        """
+        import uuid
+        from datetime import datetime
+
+        contract_id = f"CTR-{uuid.uuid4().hex[:6].upper()}"
+        date_str = start_date or datetime.now().strftime("%Y-%m-%d")
+        housing = int(final_salary * 0.25)
+        transport = 1500  # Fixed
+
+        contract_text = self._CONTRACT_TEMPLATE.format(
+            contract_id=contract_id,
+            date=date_str,
+            candidate_name=candidate_name,
+            job_title=job_title,
+            department=department,
+            start_date=date_str,
+            final_salary=f"{final_salary:,}",
+            housing_allowance=f"{housing:,}",
+            transport_allowance=f"{transport:,}",
+        )
+
+        # Validate: ensure no forbidden clauses snuck in
+        violations = self._validate_contract(contract_text)
+
+        print(f"⚖️ LegalAgent: عقد {contract_id} — {candidate_name} ({job_title}) — {final_salary:,} SAR")
+        return {
+            "contract_id": contract_id,
+            "candidate_name": candidate_name,
+            "job_title": job_title,
+            "final_salary": final_salary,
+            "contract_text": contract_text,
+            "template_used": True,
+            "llm_generated": False,
+            "violations": violations,
+            "valid": len(violations) == 0,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def _validate_contract(self, contract_text: str) -> list[str]:
+        """Validate contract has no forbidden/hallucinated clauses."""
+        import re
+        violations = []
+        text_lower = contract_text.lower()
+        for clause in self._FORBIDDEN_CLAUSES:
+            if clause.lower() in text_lower:
+                violations.append(f"⛔ Forbidden clause detected: '{clause}'")
+        return violations
