@@ -156,5 +156,31 @@
 [2026-05-08 16:27:25] HealthMonitor STARTED
 [2026-05-08 16:59:21] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
 [2026-05-08 16:59:21] HealthMonitor STARTED
+[2026-05-08 18:10:35] Pre-flight FAILED — 13 checks, 0 healed, 2 failures
+[2026-05-08 18:10:35] SELF-HEAL: recreated nawah_assets
+[2026-05-08 18:10:35] HealthMonitor STARTED
+[2026-05-08 18:10:38] HealthMonitor STOPPED
+[2026-05-08 18:11:13] Pre-flight FAILED — 13 checks, 0 healed, 2 failures
+[2026-05-08 18:11:59] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:12:27] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:12:27] SELF-HEAL: recreated nawah_assets
+[2026-05-08 18:12:27] HealthMonitor STARTED
+[2026-05-08 18:12:30] HealthMonitor STOPPED
+[2026-05-08 18:12:56] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:12:56] HealthMonitor STARTED
+[2026-05-08 18:14:10] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:14:10] SELF-HEAL: recreated nawah_assets
+[2026-05-08 18:14:10] HealthMonitor STARTED
+[2026-05-08 18:14:13] HealthMonitor STOPPED
+[2026-05-08 18:18:08] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:18:08] HealthMonitor STARTED
+[2026-05-08 18:20:53] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:20:53] HealthMonitor STARTED
+[2026-05-08 18:22:31] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:22:31] HealthMonitor STARTED
+[2026-05-08 18:23:21] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:23:21] HealthMonitor STARTED
+[2026-05-08 18:23:49] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
+[2026-05-08 18:23:49] HealthMonitor STARTED
 [2026-05-08 20:39:43] Pre-flight PASSED — 13 checks, 0 healed, 0 failures
 [2026-05-08 20:39:43] HealthMonitor STARTED
