@@ -90,21 +90,33 @@ def phase1_component_tests():
 
     dummy_meta = [{"filename": "test.pdf", "filepath": "/tmp/test.pdf", "filetype": "pdf", "size_bytes": 1024}]
     r7 = synth.analyze("اختبار بسيط لتحليل المهام", dummy_meta)
-    log(isinstance(r7, dict), "Returns dict (mock)", str(r7.get("complexity", "?")))
+    log(isinstance(r7, dict), "Returns dict (mock)", "OK")
 
-    required_keys = ["task_summary", "intent", "agents_needed", "complexity", "original_context", "attachments_metadata", "timestamp", "source"]
+    triage = r7.get("l1_triage", {})
+    required_keys = ["task_id", "source", "timestamp", "commander_instruction", "attachments", "l1_triage"]
     missing = [k for k in required_keys if k not in r7]
-    log(len(missing) == 0, "All Unified Context Bag keys present", f"missing={missing}" if missing else "8/8 keys")
+    log(len(missing) == 0, "All top-level keys present", f"missing={missing}" if missing else "6/6 keys")
 
-    log(r7.get("source") == "nawah_l1_synthesizer", "Source tag correct", r7.get("source", "?"))
-    log(len(r7.get("attachments_metadata", [])) == 1, "Attachments metadata preserved", str(r7.get("attachments_metadata", [])))
-    log(len(r7.get("original_context", "")) > 0, "Original context preserved", f"len={len(r7.get('original_context', ''))}")
-    log(r7.get("complexity") in ("Low", "Medium", "High"), "Valid complexity from mock", r7.get("complexity"))
+    triage_keys = ["intent", "priority", "complexity", "recommended_agent", "task_summary"]
+    missing_triage = [k for k in triage_keys if k not in triage]
+    log(len(missing_triage) == 0, "All triage keys present", f"missing={missing_triage}" if missing_triage else "5/5 keys")
+
+    log(r7.get("source") == "folder", "Source tag correct", r7.get("source", "?"))
+    log(len(r7.get("attachments", [])) == 1, "Attachments preserved", f"count={len(r7.get('attachments', []))}")
+    log(len(r7.get("commander_instruction", "")) > 0, "Commander instruction preserved", f"len={len(r7.get('commander_instruction', ''))}")
+    
+    complexity = triage.get("complexity", "")
+    # Coerce enum if needed (though Pydantic should have dumped it as string)
+    complexity_val = complexity.value if hasattr(complexity, "value") else str(complexity)
+    log(complexity_val in ("LOW", "MEDIUM", "HIGH"), "Valid complexity from mock", complexity_val)
 
     # Mock complexity scaling test
     long_input = " ".join(["كلمة"] * 150)
     r7_long = synth.analyze(long_input)
-    log(r7_long.get("complexity") == "High", "High complexity for long input", f"{len(long_input.split())} words → {r7_long.get('complexity')}")
+    triage_long = r7_long.get("l1_triage", {})
+    comp_long = triage_long.get("complexity", "")
+    comp_long_val = comp_long.value if hasattr(comp_long, "value") else str(comp_long)
+    log(comp_long_val == "HIGH", "High complexity for long input", f"{len(long_input.split())} words → {comp_long_val}")
 
     r8 = synth.analyze("")
     log(isinstance(r8, dict), "Empty input handled", str(r8.get("complexity", "?")))
