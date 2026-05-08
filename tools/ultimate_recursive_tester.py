@@ -421,6 +421,49 @@ def main():
     test("ERP Salary: hard_locked", salary["hard_locked"])
 
     # ============================================================
+    # PHASE 4.11: MICRO-STEP 5.2 — CONTRACT TEMPLATE & ZERO-TOUCH
+    # ============================================================
+    print("\n═══ PHASE 4.11: MICRO-STEP 5.2 (CONTRACT & ZERO-TOUCH ONBOARDING) ═══\n")
+
+    from core.agents.legal_agent import LegalAgent
+
+    legal = LegalAgent()
+
+    # Test K: Immutable Contract Template
+    contract = legal.generate_employment_contract(
+        candidate_name="م. سعد الشهري",
+        job_title="Python AI Developer",
+        final_salary=18_000,
+    )
+    test("Contract: template_used = True", contract["template_used"])
+    test("Contract: llm_generated = False", not contract["llm_generated"])
+    test("Contract: valid (no violations)", contract["valid"])
+    test("Contract: contains candidate name", "م. سعد الشهري" in contract["contract_text"])
+    test("Contract: contains salary", "18,000" in contract["contract_text"])
+    test("Contract: contains job title", "Python AI Developer" in contract["contract_text"])
+    test("Contract: has Saudi Labor Law ref", "نظام العمل السعودي" in contract["contract_text"])
+    test("Contract: has 7 articles", "المادة السابعة" in contract["contract_text"])
+
+    # Test: Clause validator catches forbidden content
+    violations = legal._validate_contract("This contract includes a non-compete clause and غرامة مالية")
+    test("Validator: catches non-compete", len(violations) >= 1)
+    test("Validator: catches غرامة مالية", any("غرامة" in v for v in violations))
+
+    # Test L: Zero-Touch Onboarding
+    onboard = erp.onboard_new_employee(
+        name="م. سعد الشهري",
+        job_title="Python AI Developer",
+        department="قسم الذكاء الاصطناعي",
+        salary=18_000,
+    )
+    test("Onboard: email generated", "@nawah.ai" in onboard["provisions"]["corporate_email"])
+    test("Onboard: slack_id exists", onboard["provisions"]["slack_id"].startswith("@"))
+    test("Onboard: payroll ACTIVE", onboard["provisions"]["payroll_status"] == "ACTIVE")
+    test("Onboard: laptop auto-ordered", "auto-ordered" in onboard["provisions"]["hardware_status"])
+    test("Onboard: zero_touch flag", onboard["zero_touch"])
+    test("Onboard: status ACTIVE", onboard["status"] == "ACTIVE")
+
+    # ============================================================
     # PHASE 5: E2E LIFECYCLE — FULL PIPELINE
     # ============================================================
     print("\n═══ PHASE 5: E2E LIFECYCLE ═══\n")
@@ -515,6 +558,8 @@ def main():
     print("    ✅ Curveball Anti-Cheating — Challenge copy-paste/robotic answers")
     print("    ✅ Finance Hard-Lock — Salary range from ERP, never +1 SAR above max")
     print("    ✅ Deadlock Breaker — 3-turn limit, auto-withdraw on stall")
+    print("    ✅ Immutable Contract Template — No LLM hallucination, Saudi Labor Law")
+    print("    ✅ Zero-Touch Provisioning — Email/Slack/Payroll/Laptop auto-created")
     print()
 
     verdict = "🟢 SYSTEM HARDENED" if failed == 0 else "🟡 NEEDS ATTENTION"

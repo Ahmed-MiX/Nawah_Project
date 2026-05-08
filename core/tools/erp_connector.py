@@ -265,12 +265,14 @@ class ERPWebhookTool:
         salary: float = 0, start_date: str = ""
     ) -> dict:
         """
-        Auto-create all onboarding artifacts for a new employee.
-        Creates: corporate email, Slack account, payroll entry, badge.
+        Zero-Touch Provisioning — Auto-create ALL onboarding artifacts.
+        Creates: corporate email, Slack ID, payroll entry, badge, laptop.
+        No human intervention required.
         """
         emp_id = f"EMP-{uuid.uuid4().hex[:6].upper()}"
         name_slug = name.replace(" ", ".").lower()[:20]
         email = f"{name_slug}@nawah.ai"
+        slack_id = f"@{name_slug}"
 
         result = {
             "action": "EMPLOYEE_ONBOARDED",
@@ -280,18 +282,24 @@ class ERPWebhookTool:
             "department": department,
             "provisions": {
                 "corporate_email": email,
-                "slack_account": f"@{name_slug}",
+                "slack_account": slack_id,
+                "slack_id": slack_id,
                 "payroll_entry": f"PAY-{emp_id}",
+                "payroll_status": "ACTIVE",
                 "monthly_salary_sar": salary,
                 "badge_id": f"BADGE-{uuid.uuid4().hex[:4].upper()}",
                 "laptop_request": f"IT-REQ-{uuid.uuid4().hex[:4].upper()}",
+                "hardware_status": "Laptop auto-ordered",
                 "access_card": "مُصدرة",
+                "ad_account": f"{name_slug}@nawah.local",
+                "vpn_access": "مُفعّل",
             },
             "start_date": start_date or "يُحدد لاحقاً",
             "status": "ACTIVE",
+            "zero_touch": True,
             "timestamp": datetime.now().isoformat(),
         }
-        print(f"🏭 ERP-HR: تم ضم {name} [{emp_id}] → {email}")
+        print(f"🏭 ERP-HR: تم ضم {name} [{emp_id}] → {email} (Zero-Touch ✅)")
         return result
 
     # ============================================================
