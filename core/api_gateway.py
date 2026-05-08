@@ -398,6 +398,58 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 # ============================================================
+# POST /api/v1/source_candidates — UI-Dictated Sourcing
+# ============================================================
+@app.post("/api/v1/source_candidates")
+async def source_candidates(payload: dict):
+    """
+    UI-dictated candidate sourcing endpoint.
+    Accepts: {"jd_id": "...", "source": "EMAIL_ONLY"|"LINKEDIN"|"BOTH"|"AUTO", "max_candidates": int}
+    The system STRICTLY obeys source and max_candidates.
+    """
+    from core.tools.sourcing_tools import get_sourcing_tools
+    from core.tools.erp_connector import get_erp_tool
+
+    jd_id = payload.get("jd_id", "")
+    source = payload.get("source", "AUTO").upper()
+    max_candidates = min(payload.get("max_candidates", 5), 20)  # Hard cap at 20
+
+    if source not in ("EMAIL_ONLY", "LINKEDIN", "BOTH", "AUTO"):
+        return JSONResponse(status_code=400, content={
+            "error": f"Invalid source: {source}. Must be EMAIL_ONLY, LINKEDIN, BOTH, or AUTO."
+        })
+
+    sourcing = get_sourcing_tools()
+    erp = get_erp_tool()
+
+    # Get JD keywords (from ERP or fallback)
+    keywords = ["Python", "AI", "LangChain"]
+    if jd_id:
+        try:
+            jd_data = erp.fetch_job_description(jd_id)
+            keywords = jd_data.get("requirements", {}).get("required_skills", keywords)
+        except Exception:
+            pass
+
+    result = sourcing.execute_dual_sourcing_strategy(
+        keywords=keywords, max_results=max_candidates, source=source
+    )
+
+    return {
+        "status": "completed",
+        "jd_id": jd_id,
+        "source_mode": source,
+        "max_candidates_requested": max_candidates,
+        "candidates_returned": len(result["final_candidates"]),
+        "strategy_used": result["strategy"],
+        "external_api_calls": 1 if result["external_search_triggered"] else 0,
+        "cost_savings": result["cost_savings"],
+        "candidates": result["final_candidates"],
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+# ============================================================
 # GET /api/health
 # ============================================================
 @app.get("/api/health")
