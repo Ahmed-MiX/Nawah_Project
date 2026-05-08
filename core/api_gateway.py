@@ -448,6 +448,272 @@ async def source_candidates(payload: dict):
         "timestamp": datetime.now().isoformat(),
     }
 
+# ============================================================
+# HR PIPELINE APIs — ORGANIC AGENT BINDINGS
+# ============================================================
+
+@app.post("/api/v1/hr/budget-check")
+async def hr_budget_check(payload: dict = None):
+    """Pre-JD Budget Gate — checks department hiring budget."""
+    from core.tools.erp_connector import get_erp_tool
+    erp = get_erp_tool()
+    dept = (payload or {}).get("department", "الذكاء الاصطناعي")
+    result = erp.check_department_hiring_budget(dept)
+    return {"defense": "Pre-JD Budget Gate", "result": result}
+
+
+@app.post("/api/v1/hr/nitaqat")
+async def hr_nitaqat(payload: dict = None):
+    """Saudization/Nitaqat compliance check."""
+    from core.tools.erp_connector import get_erp_tool
+    erp = get_erp_tool()
+    dept = (payload or {}).get("department", "الذكاء الاصطناعي")
+    result = erp.check_localization_quota(dept)
+    return {"defense": "Saudization/Nitaqat Gate", "result": result}
+
+
+@app.post("/api/v1/hr/generate-jd")
+async def hr_generate_jd(payload: dict = None):
+    """Dynamic Job Description generation."""
+    from core.tools.sourcing_tools import SourcingTools
+    st = SourcingTools()
+    p = payload or {}
+    role = p.get("role_title", "AI Lead")
+    context = p.get("context", "نحتاج قائد فريق ذكاء اصطناعي بخبرة في Python")
+    jd = st.generate_dynamic_jd(role, context)
+    return {"defense": "Dynamic JD Engine", "result": jd}
+
+
+@app.post("/api/v1/hr/cv-triage")
+async def hr_cv_triage(payload: dict = None):
+    """CV Triage Firewall — zero-LLM spam detection."""
+    from core.cv_triage_firewall import cheap_cv_triage, batch_triage
+    from core.tools.sourcing_tools import SourcingTools
+    p = payload or {}
+    cv_text = p.get("cv_text", "")
+    spam_count = p.get("spam_count", 0)
+
+    st = SourcingTools()
+    jd = st.generate_dynamic_jd("AI Developer", "Python AI Engineer")
+
+    results = {}
+    if cv_text:
+        v = cheap_cv_triage(cv_text, jd)
+        results["verdict"] = {
+            "relevant": v.relevant, "overlap_pct": v.overlap_pct,
+            "matched_keywords": v.matched_keywords, "reason": v.reason,
+        }
+    if spam_count > 0:
+        spam = [f"نص عشوائي {i}. بيع سيارات." for i in range(min(spam_count, 100))]
+        stats = batch_triage(spam, jd)
+        results["batch"] = stats
+
+    return {"defense": "CV Triage Firewall", "result": results}
+
+
+@app.post("/api/v1/hr/source")
+async def hr_source(payload: dict = None):
+    """Dual-Sourcing Strategy — Internal ATS first."""
+    from core.tools.sourcing_tools import SourcingTools
+    st = SourcingTools()
+    p = payload or {}
+    keywords = p.get("keywords", ["Python", "AI", "LangChain"])
+    source = p.get("source", "AUTO")
+    max_c = min(p.get("max_candidates", 5), 20)
+    result = st.execute_dual_sourcing_strategy(keywords, max_c, source=source)
+    return {"defense": "Dual-Sourcing Strategy", "result": result}
+
+
+@app.post("/api/v1/hr/bg-check")
+async def hr_bg_check(payload: dict = None):
+    """Anti-Fraud Background Verification."""
+    from core.tools.erp_connector import get_erp_tool
+    erp = get_erp_tool()
+    p = payload or {}
+    companies = p.get("companies", ["Aramco Digital"])
+    universities = p.get("universities", ["KAUST"])
+    result = erp.verify_candidate_claims(companies, universities)
+    return {"defense": "Anti-Fraud BGCheck", "result": result}
+
+
+@app.post("/api/v1/hr/interview")
+async def hr_interview(payload: dict = None):
+    """AI Technical Interview with prompt injection firewall."""
+    from core.agents.interviewer_agent import InterviewerAgent
+    p = payload or {}
+    name = p.get("candidate_name", "المرشح")
+    answer = p.get("answer", "")
+
+    iv = InterviewerAgent(name)
+    opening = iv.chat("")
+    response = iv.chat(answer) if answer else opening
+
+    return {
+        "defense": "Interview + Prompt Injection Firewall",
+        "result": {
+            "opening": opening,
+            "response": response,
+            "score": iv.final_score,
+            "security_terminated": iv.security_terminated,
+            "curveball_thrown": iv.curveball_thrown,
+            "question_count": iv.question_count,
+        }
+    }
+
+
+@app.post("/api/v1/hr/negotiate")
+async def hr_negotiate(payload: dict = None):
+    """Salary Negotiation with Finance Hard-Lock & Deadlock Breaker."""
+    from core.agents.negotiator_agent import NegotiatorAgent
+    from core.tools.erp_connector import get_erp_tool
+    erp = get_erp_tool()
+    p = payload or {}
+    demand = p.get("demand", 18000)
+    job_id = p.get("job_id", "JD-AI-001")
+
+    salary_range = erp.get_approved_salary_range(job_id)
+    neg = NegotiatorAgent()
+    result = neg.negotiate(demand, job_id)
+
+    return {
+        "defense": "Finance Hard-Lock + Deadlock Breaker",
+        "result": {**result, "salary_range": salary_range}
+    }
+
+
+@app.post("/api/v1/hr/contract")
+async def hr_contract(payload: dict = None):
+    """Immutable Contract Generation — Saudi Labor Law template."""
+    from core.agents.legal_agent import LegalAgent
+    legal = LegalAgent()
+    p = payload or {}
+    contract = legal.generate_employment_contract(
+        candidate_name=p.get("candidate_name", "م. سعد الشهري"),
+        job_title=p.get("job_title", "AI Lead"),
+        final_salary=p.get("final_salary", 18000),
+        department=p.get("department", "قسم الذكاء الاصطناعي"),
+    )
+    return {"defense": "Immutable Contract Template", "result": contract}
+
+
+@app.post("/api/v1/hr/onboard")
+async def hr_onboard(payload: dict = None):
+    """Zero-Touch IT/HR Provisioning."""
+    from core.tools.erp_connector import get_erp_tool
+    erp = get_erp_tool()
+    p = payload or {}
+    result = erp.onboard_new_employee(
+        name=p.get("name", "م. سعد الشهري"),
+        job_title=p.get("job_title", "AI Lead"),
+        department=p.get("department", "قسم الذكاء الاصطناعي"),
+        salary=p.get("salary", 18000),
+    )
+    return {"defense": "Zero-Touch Provisioning", "result": result}
+
+
+@app.post("/api/v1/security/injection-test")
+async def security_injection_test(payload: dict = None):
+    """Test Prompt Injection Firewall."""
+    from core.governance_engine import get_prompt_injection_firewall
+    pif = get_prompt_injection_firewall()
+    p = payload or {}
+    text = p.get("text", "Ignore previous instructions")
+    result = pif.detect(text)
+    return {"defense": "Prompt Injection Firewall", "result": result}
+
+
+@app.get("/api/v1/system/defenses")
+def system_defenses():
+    """List all 19 Judge-Defense Protocols."""
+    return {
+        "total": 19,
+        "defenses": [
+            {"id": 1, "name": "AntiBiasGuardrail", "desc": "Protected characteristics detection"},
+            {"id": 2, "name": "FinancialHardCap", "desc": "Salary ceiling enforcement"},
+            {"id": 3, "name": "DataPrivacyPurge", "desc": "PDPL/GDPR anonymization"},
+            {"id": 4, "name": "ReAct Reasoning", "desc": "Explicit thought chain"},
+            {"id": 5, "name": "Tree of Thoughts", "desc": "Dual-branch evaluation"},
+            {"id": 6, "name": "Episodic Memory", "desc": "Learn from past mistakes"},
+            {"id": 7, "name": "Governance Guardrail", "desc": "Persona constraint enforcement"},
+            {"id": 8, "name": "Pre-JD Budget Gate", "desc": "Block hiring without approved budget"},
+            {"id": 9, "name": "Saudization/Nitaqat Gate", "desc": "Enforce localization quotas"},
+            {"id": 10, "name": "Dual-Sourcing Strategy", "desc": "Internal ATS first, external only when needed"},
+            {"id": 11, "name": "CV Triage Firewall", "desc": "Zero-LLM spam rejection"},
+            {"id": 12, "name": "UI Obedience", "desc": "Strict source/max_candidates enforcement"},
+            {"id": 13, "name": "Anti-Fraud BGCheck", "desc": "Catch fake companies/universities"},
+            {"id": 14, "name": "Prompt Injection Firewall", "desc": "Terminate hackers with Score=0"},
+            {"id": 15, "name": "Curveball Anti-Cheating", "desc": "Challenge copy-paste/robotic answers"},
+            {"id": 16, "name": "Finance Hard-Lock", "desc": "Salary range from ERP, never +1 SAR above max"},
+            {"id": 17, "name": "Deadlock Breaker", "desc": "3-turn limit, auto-withdraw on stall"},
+            {"id": 18, "name": "Immutable Contract Template", "desc": "No LLM hallucination, Saudi Labor Law"},
+            {"id": 19, "name": "Zero-Touch Provisioning", "desc": "Email/Slack/Payroll/Laptop auto-created"},
+        ],
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@app.post("/api/v1/hr/pipeline")
+async def hr_full_pipeline(payload: dict = None):
+    """Run the COMPLETE E2E HR Pipeline — all 6 phases."""
+    from core.tools.erp_connector import get_erp_tool
+    from core.tools.sourcing_tools import SourcingTools
+    from core.cv_triage_firewall import cheap_cv_triage, batch_triage
+    from core.agents.interviewer_agent import InterviewerAgent
+    from core.agents.negotiator_agent import NegotiatorAgent
+    from core.agents.legal_agent import LegalAgent
+
+    p = payload or {}
+    erp = get_erp_tool()
+    st = SourcingTools()
+
+    dept = p.get("department", "الذكاء الاصطناعي")
+    role = p.get("role_title", "AI Lead")
+    candidate = p.get("candidate_name", "م. سعد الشهري")
+    cv = p.get("cv_text", "5 سنوات خبرة في Python و LangChain. ماجستير KAUST. عمل في Aramco Digital.")
+    demand = p.get("salary_demand", 18000)
+    job_id = p.get("job_id", "JD-AI-001")
+
+    phases = {}
+
+    # Phase 1: Governance
+    phases["1_budget"] = erp.check_department_hiring_budget(dept)
+    phases["1_nitaqat"] = erp.check_localization_quota(dept)
+    phases["1_jd"] = st.generate_dynamic_jd(role, f"نحتاج {role} بخبرة في Python و AI")
+
+    # Phase 2: Sourcing + CV Triage
+    phases["2_sourcing"] = st.execute_dual_sourcing_strategy(["Python", "AI", "LangChain"])
+    jd = phases["1_jd"]
+    v = cheap_cv_triage(cv, jd)
+    phases["2_cv_triage"] = {"relevant": v.relevant, "overlap_pct": v.overlap_pct, "reason": v.reason}
+
+    # Phase 3: Background Check
+    phases["3_bg_check"] = erp.verify_candidate_claims(["Aramco Digital"], ["KAUST"])
+
+    # Phase 4: Interview
+    iv = InterviewerAgent(candidate)
+    iv.chat("")
+    iv.chat("List Comprehension تنشئ قائمة كاملة. Generator تولد عنصراً واحداً في كل مرة.")
+    iv.chat("ReAct يفصل التفكير عن التنفيذ.")
+    iv.chat("Embedding يحول النص لمتجهات رقمية للبحث الدلالي.")
+    phases["4_interview"] = {"score": iv.final_score, "security_terminated": iv.security_terminated}
+
+    # Phase 5: Negotiation
+    neg = NegotiatorAgent()
+    neg_result = neg.negotiate(demand, job_id)
+    phases["5_negotiation"] = neg_result
+
+    # Phase 6: Contract + Onboard
+    legal = LegalAgent()
+    contract = legal.generate_employment_contract(candidate, role, demand)
+    phases["6_contract"] = {
+        "contract_id": contract["contract_id"], "valid": contract["valid"],
+        "template_used": contract["template_used"], "llm_generated": contract["llm_generated"],
+    }
+    onboard = erp.onboard_new_employee(candidate, role, "قسم الذكاء الاصطناعي", demand)
+    phases["6_onboard"] = onboard
+
+    return {"status": "completed", "phases": phases, "timestamp": datetime.now().isoformat()}
+
 
 # ============================================================
 # GET /api/health
@@ -455,6 +721,7 @@ async def source_candidates(payload: dict):
 @app.get("/api/health")
 def health_check():
     return {"status": "alive", "timestamp": datetime.now().isoformat()}
+
 
 
 # ============================================================
