@@ -33,7 +33,7 @@ class TaskBroker:
         self._init_db()
 
     def _get_conn(self):
-        """Get a thread-safe SQLite connection (safe for Streamlit multi-thread)."""
+        """Get a thread-safe SQLite connection."""
         conn = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=10000")

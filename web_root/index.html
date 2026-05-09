@@ -8,6 +8,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+    <!-- NUCLEAR LOGIN BYPASS: Set hash BEFORE React mounts so Router starts at /app -->
+    <script>
+      if (!window.location.hash || window.location.hash === '#/' || window.location.hash === '#/signin' || window.location.hash === '#/landing') {
+        window.location.hash = '#/app';
+      }
+    </script>
     <script type="module" crossorigin src="/assets/index-6bH_YhlY.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-1gRmiab2.css">
     <style>
@@ -90,9 +96,7 @@
     <div id="root"></div>
 
     <!-- ============================================================ -->
-    <!-- NAWAH OVERLAY: Live Data Injection + Navigation Bridge        -->
-    <!-- Injects real API data into the colleague's React SPA          -->
-    <!-- WITHOUT modifying the minified bundle or CSS aesthetic.        -->
+    <!-- NAWAH OVERLAY: Login Bypass + Live Data + Navigation Bridge   -->
     <!-- ============================================================ -->
     <script>
     (function NawahOverlay() {
@@ -101,6 +105,22 @@
       const API = '';
       let lastStats = null;
       let overlayInjected = false;
+
+      // ── 0. LOGIN BYPASS (SAFETY NET) ──
+      // Primary bypass runs in <head> before React loads.
+      // This is a fallback if React somehow re-routes to login.
+      function bypassLoginSafety() {
+        const hash = window.location.hash;
+        if (!hash || hash === '#/' || hash === '#/signin' || hash === '#/landing') {
+          window.location.hash = '#/app';
+        }
+      }
+      // Re-check every second for 5 seconds as fallback
+      let bypassChecks = 0;
+      const bypassInterval = setInterval(() => {
+        bypassLoginSafety();
+        if (++bypassChecks >= 5) clearInterval(bypassInterval);
+      }, 1000);
 
       // ── 1. LIVE STATS POLLING ──
       // The React app calls /api/stats but only on initial load.

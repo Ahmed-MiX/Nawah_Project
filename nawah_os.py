@@ -3,7 +3,7 @@ nawah_os.py — نَوَاة Master Orchestrator
 THE ONE COMMAND: python nawah_os.py
 
 Launches:
-  1. Streamlit UI (port 8501)
+  1. FastAPI Gateway (uvicorn, port 8000)
   2. File Watcher daemon
   3. Email Watcher daemon
   4. Health Monitor thread
@@ -52,7 +52,7 @@ for d in ["nawah_inbox", "nawah_outbox", "nawah_processed", "nawah_quarantine", 
 # PORT PURGE — Kill any rogue process holding PORT before launch
 # ============================================================
 def purge_port(port):
-    """Aggressively free the port before Streamlit launch."""
+    """Aggressively free the port before server launch."""
     if sys.platform == "win32":
         try:
             result = subprocess.run(
@@ -67,12 +67,7 @@ def purge_port(port):
                                        capture_output=True, timeout=5)
         except Exception:
             pass
-        # Also kill any stale streamlit processes
-        try:
-            subprocess.run(["taskkill", "/F", "/IM", "streamlit.exe", "/T"],
-                           capture_output=True, timeout=5)
-        except Exception:
-            pass
+
     else:
         try:
             subprocess.run(["fuser", "-k", f"{port}/tcp"],
